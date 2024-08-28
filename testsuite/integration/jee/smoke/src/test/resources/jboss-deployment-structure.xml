@@ -1,0 +1,9 @@
+<jboss-deployment-structure>
+  <!-- Make sub deployments isolated by default, so they cannot see each others classes without a Class-Path entry -->
+  <ear-subdeployments-isolated>true</ear-subdeployments-isolated>
+  <deployment>
+    <dependencies>
+      <module name="com.ericsson.oss.mediation.engine-api" slot="1.9.1" export="true" />
+    </dependencies>
+    </deployment>
+</jboss-deployment-structure>

@@ -1,0 +1,27 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.ericsson.nms.mediation</groupId>
+		<artifactId>integration</artifactId>
+		<version>2.0.170-SNAPSHOT</version>
+	</parent>
+	<artifactId>jee</artifactId>
+	<packaging>pom</packaging>
+	<name>jee</name>
+	<profiles>
+		<profile>
+			<id>skip_jee</id>
+			<activation>
+				<property>
+					<name>ts.skip.integration.jee</name>
+				</property>
+			</activation>
+			<properties>
+				<maven.test.skip>true</maven.test.skip>
+			</properties>
+		</profile>
+	</profiles>
+	<modules>
+		<module>smoke</module>
+	</modules>
+</project>

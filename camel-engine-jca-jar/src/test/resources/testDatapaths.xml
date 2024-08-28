@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mediation modelName="testModel" xmlns="http://www.ericsson.com/DataPaths"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+	<!-- eftp to defined here so it can be re-used in both data paths -->
+	<endpoint id="EventFTP"
+		uri="eftp://${ipAddress}:${port}?username=${user}&amp;password=${password}">
+		<property name="ipAddress" type="instance" />
+		<property name="port" type="instance" />
+		<property name="user" type="instance" />
+		<property name="password" type="instance" />
+	</endpoint>
+
+	<endpoint id="Sftp_File" uri="file:${directory}">
+		<property name="directory" type="instance" />
+	</endpoint>
+
+
+	<errorhandler id="ftp" redeliver_attempts="0">
+		<processor classname="com.ericsson.nms.mediation.FTPErrorProcessor" />
+		<to id="anonymous" uri="jms:queue:${queueName}?username=guest&amp;password=guestp">
+			<property name="queueName" type="instance" />
+		</to>
+	</errorhandler>
+
+
+	<!-- Basic Data Path for Single File Transfer -->
+	<datapath id="com.ericsson.nms.mediation.singleFileTransfer"
+		errorhandler="ftp">
+		<protocolInfo name="PM" />
+		<accessPoint id="${datapathId}" type="synch" />
+		<processor classname="com.ericsson.nms.mediation.EftpProcessor" />
+		<reference type="endpoint" ref="EventFTP" />
+		<reference type="endpoint" ref="Sftp_File"></reference>
+		<processor classname="com.ericsson.nms.mediation.EventProcessor" />
+		<to id="anonymous" uri="jms:queue:${queueName}?username=guest&amp;password=guestp">
+			<property name="queueName" type="instance" />
+		</to>
+	</datapath>
+
+	<!-- Composite Data path -->
+	<datapath id="com.ericsson.nms.mediation.compositeFileTransfer">
+		<protocolInfo name="PM" />
+		<accessPoint id="${datapathId}" type="synch" />
+		<to id="anonymous" uri="cftc://Ericsson?ftPluginJarDirectory=/opt/ericsson/plugin" />
+	</datapath>
+</mediation>

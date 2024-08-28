@@ -1,0 +1,98 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.ericsson.nms.mediation</groupId>
+		<artifactId>camel-engine-legacy</artifactId>
+		<version>2.0.170-SNAPSHOT</version>
+	</parent>
+	<artifactId>camel-engine-jca-rar</artifactId>
+	<name>camel-engine-jca-rar</name>
+	<packaging>rar</packaging>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-resources-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>copy-resources</id>
+						<!-- here the phase you need -->
+						<phase>validate</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${basedir}/src/main/rar/META-INF</outputDirectory>
+							<resources>
+								<resource>
+									<directory>src/main/resources/META-INF</directory>
+									<includes>
+										<include>**/*</include>
+									</includes>
+									<filtering>true</filtering>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-rar-plugin</artifactId>
+				<version>2.2</version>
+				<executions>
+					<execution>
+						<id>rar</id>
+						<phase>test</phase>
+						<goals>
+							<goal>rar</goal>
+						</goals>
+						<inherited>false</inherited>
+						<configuration>
+							<includeJar>false</includeJar>
+							<filterRarSourceDirectory>true</filterRarSourceDirectory>
+							<manifestFile />
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+	<dependencies>
+		<!-- Resource adapter classes -->
+		<dependency>
+			<groupId>com.ericsson.nms.mediation</groupId>
+			<artifactId>camel-engine-jca-jar</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<!--FM component -->
+		<dependency>
+			  <groupId>com.ericsson.nms.mediation.component</groupId>
+			  <artifactId>fmcorba-component</artifactId>
+		</dependency>
+		<dependency>
+                          <groupId>com.ericsson.nms.mediation.component</groupId>
+                          <artifactId>fmsnmp-component</artifactId>
+                </dependency>
+
+		<dependency>
+			<groupId>com.ericsson.oss.itpf.sdk</groupId>
+			<artifactId>sdk-modeled-eventbus-non-cdi</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.ericsson.nms.mediation.sets</groupId>
+			<artifactId>mediationset-pm-ecimcom</artifactId>
+			<version>${version.pm.mediation.set}</version>
+			<exclusions>
+				<exclusion>
+					<artifactId>
+						mediation-service-jca-common
+					</artifactId>
+					<groupId>com.ericsson.nms.mediation</groupId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		
+	</dependencies>
+</project>

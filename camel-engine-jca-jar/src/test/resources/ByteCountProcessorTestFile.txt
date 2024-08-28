@@ -1,0 +1,214 @@
+/*------------------------------------------------------------------------------
+ *******************************************************************************
+ * COPYRIGHT Ericsson 2012
+ *
+ * The copyright to the computer program(s) herein is the property of
+ * Ericsson Inc. The programs may be used and/or copied only with written
+ * permission from Ericsson Inc. or in accordance with the terms and
+ * conditions stipulated in the agreement/contract under which the
+ * program(s) have been supplied.
+ *******************************************************************************
+ *----------------------------------------------------------------------------*/
+package com.ericsson.nms.mediation.camel.components.eftp;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.SocketException;
+
+import org.apache.camel.*;
+import org.apache.camel.impl.DefaultProducer;
+import org.apache.commons.net.ftp.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.ericsson.nms.mediation.camel.components.eftp.exceptions.GenericEftpException;
+import com.ericsson.nms.mediation.camel.components.eftp.utils.EftpUtilities;
+
+/**
+ * The EventDrivenFtp producer.
+ */
+public class EventDrivenFtpProducer extends DefaultProducer {
+
+    private static final transient Logger LOG = LoggerFactory.getLogger(EventDrivenFtpProducer.class);
+
+    private final EventDrivenFtpEndpoint endpoint;
+
+    private FTPClient ftpClient;
+
+    /**
+     * Producer constructor
+     * 
+     * @param endpoint
+     */
+    public EventDrivenFtpProducer(final EventDrivenFtpEndpoint endpoint) {
+        super(endpoint);
+        this.endpoint = endpoint;
+    }
+
+    /**
+     * The process method is the entry point from Camel into this processor
+     * 
+     * @param exchange {@link Exchange}
+     * @return
+     * @throws GenericEftpException
+     */
+    @Override
+    public void process(final Exchange exchange) throws GenericEftpException {
+        try {
+            createConnection();
+
+            final String destDirectory = (String) exchange.getIn().getHeader(EftpConstants.EFTP_DESTINATION_DIRECTORY);
+            final String destFile = (String) exchange.getIn().getHeader(EftpConstants.EFTP_DESTINATION_FILE);
+            final String srcFile = (String) exchange.getIn().getHeader(EftpConstants.EFTP_SOURCE_FILE);
+            final String srcDir = (String) exchange.getIn().getHeader(EftpConstants.EFTP_SOURCE_DIRECTORY);
+
+            final Message message = exchange.getIn();
+            final CountingInputStream cis = new CountingInputStream(getFile(srcDir, srcFile));
+            message.setBody(cis);
+
+            LOG.debug("process will be called for destination: {}", destDirectory + destFile);
+
+            message.setHeader(Exchange.FILE_NAME, EftpUtilities.createFilePathWithSeparator(destDirectory, destFile));
+
+            exchange.setIn(message);
+		} catch (GenericEftpException e) {
+			LOG.error("Error detected during connection with error code: [{}] and description: [{}]", 
+				e.getErrorCode(), e.getErrorDescription());
+			throw e;
+		} catch (SocketException e) {
+			LOG.error("SocketException detected during connection, has error message: [{}]", e.getMessage());
+			throw new GenericEftpException(ftpClient.getReplyCode(), ftpClient.getReplyString(), e);
+		} catch (FTPConnectionClosedException e) {
+			LOG.error("FTPConnectionClosedException detected during connection, has error message: [{}]", e.getMessage());
+			throw new GenericEftpException(ftpClient.getReplyCode(), ftpClient.getReplyString(), e);
+		} catch (IOException e) {
+			LOG.error("IOException detected during connection, has error message: [{}]", e.getMessage());
+			throw new GenericEftpException(ftpClient.getReplyCode(), ftpClient.getReplyString(), e);
+		} finally {
+            try {
+                releaseConnection();
+            } catch (final IOException e) {
+                LOG.error("Error releasing FTP connection");
+                LOG.error("Socket exception occurred in producer " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Helper method to get the file from open FTP session
+     * 
+     * @param request
+     *            Request containing information about the file
+     * @return
+     * @throws GenericEftpException
+     */
+    private InputStream getFile(final String srcDir, final String srcFile) throws GenericEftpException {
+        try {
+            // final String filePath =
+            // EftpUtilities.createFilePathWithSeparator(
+            // srcDir, srcFile);
+            final String filePath = srcDir + srcFile;
+            LOG.debug("getFile will be called for source: {}", filePath);
+            final InputStream stream = this.ftpClient.retrieveFileStream(filePath);
+
+            // If we dont get a positive response we throw and exception
+            // Need to check the reply code and explicitly throw an exception as
+            // a negative ftp reply code will not throw an exception in Java
+            if (!isPositiveResponse(ftpClient.getReplyCode())) {
+                throw new GenericEftpException(ftpClient.getReplyCode(), ftpClient.getReplyString(), null);
+            }
+            return stream;
+        } catch (final GenericEftpException e) {
+        	throw e;
+        } catch (final Exception e) {
+            // the unforseen, we'll include the reply code, to see what was
+            // happening when we got here.
+            throw new GenericEftpException(ftpClient.getReplyCode(), ftpClient.getReplyString(), e);
+        }
+    }
+
+    /**
+     * Create FTP connection for this producer TODO: This method should be removed and replaced with more complex code that will handle pooling of ftp connections in later stories
+     * 
+     * @throws IOException
+     * @throws SocketException
+     * @throws GenericEftpException
+     * @throws FTPConnectionClosedException
+     * 
+     * @throws Exception
+     */
+    private void createConnection() throws GenericEftpException, IOException, SocketException, FTPConnectionClosedException {
+        LOG.debug("createConnection method called");
+        final EndpointConfiguration epc = endpoint.getEndpointConfiguration();
+        final String host = epc.getParameter("host");
+        final Integer port = Integer.parseInt(epc.getParameter("port").toString());
+        final String username = endpoint.getUsername();
+        final String password = endpoint.getPassword();
+		connectAndConfirm(host, port);
+		loginAndConfirm(username, password);
+
+    }
+
+    private void connectAndConfirm(final String host, final Integer port) throws SocketException, IOException, GenericEftpException {
+        this.ftpClient = createFtpClient();
+        this.ftpClient.connect(host, port);
+        confirmConnection();
+    }
+
+    private void loginAndConfirm(final String username, final String password) throws IOException, FTPConnectionClosedException, GenericEftpException {
+        // Need to check for successful login
+        final boolean loggedIn = this.ftpClient.login(username, password);
+        if (!loggedIn) {
+            final int replyCode = ftpClient.getReplyCode();
+            final String replyReason = ftpClient.getReplyString();
+            releaseConnection();
+            throw new GenericEftpException(replyCode, replyReason);
+        }
+    }
+
+    private void confirmConnection() throws IOException, GenericEftpException {
+        // After connection attempt, you should check the reply code to verify
+        // success.
+        final int replyCode = ftpClient.getReplyCode();
+        if (!FTPReply.isPositiveCompletion(replyCode)) {
+            releaseConnection();
+            throw new GenericEftpException(replyCode, ftpClient.getReplyString());
+        }
+    }
+
+    /**
+     * Seam added for JUnit tests.
+     * 
+     * @return the FTP Client to use ..
+     */
+    protected FTPClient createFtpClient() {
+        return new FTPClient();
+    }
+
+    /**
+     * Release FTP connection for this producer TODO: These methods should be removed and replaced with more complex code that would handle pooling of ftp connections in later stories
+     * 
+     * @throws IOException
+     * 
+     * @throws Exception
+     */
+    private void releaseConnection() throws IOException {
+        LOG.debug("releaseConnection called");
+        if (this.ftpClient != null && this.ftpClient.isConnected()) {
+            this.ftpClient.disconnect();
+            this.ftpClient = null;
+        }
+    }
+
+    /**
+     * Helper for checking for positive responses from the FTP server.
+     * 
+     * @param replyCode
+     *            reply code received from the FTP server
+     * @return true if the reply code indicates the last action performed was accepted.
+     */
+    private boolean isPositiveResponse(final int replyCode) {
+        return FTPReply.isPositiveCompletion(replyCode) || FTPReply.isPositiveIntermediate(replyCode) || FTPReply.isPositivePreliminary(replyCode);
+    }
+
+}
